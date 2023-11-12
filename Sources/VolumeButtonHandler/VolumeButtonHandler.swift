@@ -8,7 +8,9 @@ import AVFAudio
 
 public class VolumeButtonHandler: NSObject {
     public typealias VolumeButtonBlock = () -> Void
-
+    
+    private let tag = "VolumeButtonHandler"
+    
     var initialVolume: CGFloat = 0.0
     var session: AVAudioSession?
     var volumeView: MPVolumeView?
@@ -35,9 +37,9 @@ public class VolumeButtonHandler: NSObject {
         appIsActive = true
         sessionCategory = AVAudioSession.Category.playback.rawValue
         sessionOptions = AVAudioSession.CategoryOptions.mixWithOthers
-
+        
         sessionContext.storeBytes(of: sessionContext, as: UnsafeMutableRawPointer.self)
-
+        
         volumeView = MPVolumeView(frame: CGRectMake(CGFloat(MAXFLOAT), CGFloat(MAXFLOAT), 0, 0))
         
         UIApplication.shared.windows.first?.addSubview(volumeView!)
@@ -62,7 +64,7 @@ public class VolumeButtonHandler: NSObject {
         self.disableSystemVolumeHandler = disableSystemVolumeHandler
         self.perform(#selector(setupSession), with: nil, afterDelay: 1)
     }
-
+    
     public func stopHandler() {
         guard isStarted else { return }
         isStarted = false
@@ -91,7 +93,7 @@ public class VolumeButtonHandler: NSObject {
         
         volumeView?.isHidden = !disableSystemVolumeHandler
     }
-
+    
     func useExactJumpsOnly(enabled: Bool) {
         exactJumpsOnly = enabled
     }
@@ -122,10 +124,12 @@ public class VolumeButtonHandler: NSObject {
         if initialVolume > VolumeButtonHandler.maxVolume {
             initialVolume = VolumeButtonHandler.maxVolume
             isAdjustingInitialVolume = true
+            debugPrint("\(tag) setInitialVolume to \(initialVolume)")
             setSystemVolume(initialVolume)
         } else if initialVolume < VolumeButtonHandler.minVolume {
             initialVolume = VolumeButtonHandler.minVolume
             isAdjustingInitialVolume = true
+            debugPrint("\(tag) setInitialVolume to \(initialVolume)")
             setSystemVolume(initialVolume)
         }
         currentVolume = Float(initialVolume)
@@ -159,25 +163,24 @@ public class VolumeButtonHandler: NSObject {
                 return
             }
             
-            if disableSystemVolumeHandler && newVolume == Float(initialVolume) {
-                // Resetting volume, skip blocks
-                return
-            } else if isAdjustingInitialVolume {
-                if newVolume == Float(VolumeButtonHandler.maxVolume) || newVolume == Float(VolumeButtonHandler.minVolume) {
-                    // Sometimes when setting initial volume during setup the callback is triggered incorrectly
-                    return
-                }
-                isAdjustingInitialVolume = false
-            }
-            
             let difference = abs(newVolume - oldVolume)
             
-            debugPrint("Old Vol:%f New Vol:%f Difference = %f", oldVolume, newVolume, difference)
+            debugPrint("\(tag) Old Vol:\(oldVolume) New Vol:\(newVolume) Difference = \(difference)")
+            
+            if disableSystemVolumeHandler && newVolume == Float(initialVolume) {
+                // Resetting volume, skip blocks
+                debugPrint("\(tag) disableSystemVolumeHandler and newVolume == Float(initialVolume), skip")
+                return
+            } else if isAdjustingInitialVolume {
+                debugPrint("\(tag) disAdjustingInitialVolume, skip")
+                isAdjustingInitialVolume = false
+                return
+            }
             
             if exactJumpsOnly && difference < 0.062 && (newVolume == 1.0 || newVolume == 0.0) {
-                debugPrint("Using a non-standard Jump of %f (%f-%f) which is less than the .0625 because a press of the volume button resulted in hitting min or max volume", difference, oldVolume, newVolume)
+                debugPrint("\(tag) Using a non-standard Jump of %f (%f-%f) which is less than the .0625 because a press of the volume button resulted in hitting min or max volume", difference, oldVolume, newVolume)
             } else if exactJumpsOnly && (difference > 0.063 || difference < 0.062) {
-                debugPrint("Ignoring non-standard Jump of %f (%f-%f), which is not the .0625 a press of the actually volume button would have resulted in.", difference, oldVolume, newVolume)
+                debugPrint("\(tag) Ignoring non-standard Jump of %f (%f-%f), which is not the .0625 a press of the actually volume button would have resulted in.", difference, oldVolume, newVolume)
                 setInitialVolume()
                 return
             }
@@ -202,12 +205,13 @@ public class VolumeButtonHandler: NSObject {
     }
     
     func setSystemVolume(_ volume: CGFloat) {
-        let volumeView = MPVolumeView(frame: .zero)
-        if let volumeSlider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider {
+        debugPrint("\(tag) setSystemVolume to \(volume)")
+        
+        if let volumeView = self.volumeView,
+           let volumeSlider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
                 volumeSlider.value = Float(volume)
             }
         }
     }
-
 }
